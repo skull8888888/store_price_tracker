@@ -10,27 +10,46 @@ import firebase from "react-native-firebase";
 // import AddNewOddScreen from "./components/AddNewOddScreen";
 
 
-const db = firebase.database()
 
+const messaging = firebase.messaging()
 
 export default class App extends React.Component {
 
-getText = async () => {
-  const stores = await db.ref('STORES').once('value')
 
-  stores.forEach(childSnapshot => {
-    console.log(childSnapshot.val())
-  })
+  async requestNotificationPermission(){
 
-  return "lego"
-}
+    const enabled = await firebase.messaging().hasPermission();
+
+    if (enabled) {
+
+      const token = await firebase.messaging().getToken();
+      
+      if (token) {
+        fetch('http').then((res)=> {
+          //save in storage
+        })
+      } else {
+
+      }
+
+    } else {
+      // ask for permission again
+      try {
+        await firebase.messaging().requestPermission();
+      } catch (error) {
+        //handle alert('its important')
+      }
+
+    }
+
+  }
 
   componentDidMount(){
-    this.getText()
+    
   }
 
   render() {
-    return (<View style={{ flex: 1, backgroundColor: 'red'}}></View>)
+    return (<View style={{ flex: 1, backgroundColor: 'green'}}></View>)
   }
 }
 
