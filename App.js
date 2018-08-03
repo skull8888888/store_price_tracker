@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, AsyncStorage } from "react-native";
 // import { createStackNavigator } from "react-navigation";
 // import { Toolbar, ToolbarContent } from "react-native-paper";
 import firebase from "react-native-firebase";
@@ -9,29 +9,28 @@ import firebase from "react-native-firebase";
 // import StoresScreen from "./components/StoresScreen";
 // import AddNewOddScreen from "./components/AddNewOddScreen";
 
-
-
-const messaging = firebase.messaging()
-
 export default class App extends React.Component {
-
-
-  async requestNotificationPermission(){
-
+  requestNotificationPermission = async () => {
     const enabled = await firebase.messaging().hasPermission();
 
     if (enabled) {
-
       const token = await firebase.messaging().getToken();
-      
-      if (token) {
-        fetch('http').then((res)=> {
-          //save in storage
-        })
-      } else {
 
+      if (!token) {
+        const response = await fetch(
+          "https://store-price-tracker.herokuapp.com/api/register",
+          {
+            method: "POST",
+
+            body: JSON.stringify({
+              token: token
+            })
+          }
+        );
+        const json = await response.json();
+
+        await AsyncStorage.setItem("userId", json.userId);
       }
-
     } else {
       // ask for permission again
       try {
@@ -39,17 +38,15 @@ export default class App extends React.Component {
       } catch (error) {
         //handle alert('its important')
       }
-
     }
+  };
 
-  }
-
-  componentDidMount(){
-    
+  componentDidMount() {
+    this.requestNotificationPermission();
   }
 
   render() {
-    return (<View style={{ flex: 1, backgroundColor: 'green'}}></View>)
+    return <View style={{ flex: 1, backgroundColor: "green" }} />;
   }
 }
 

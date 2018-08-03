@@ -12,9 +12,19 @@ import {
 import { AsyncStorage, Alert } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { Button } from "react-native-paper";
-import * as firebase from 'firebase';
+import firebase from "react-native-firebase";
 
 const { width, height } = Dimensions.get("window");
+const db = firebase.database();
+
+const convertValToArray = (data) => {
+  const arr = [];
+  data.forEach(item => {
+    arr.push(item.val())
+  })
+
+  return arr;
+}
 
 export default class HomeScreen extends React.Component {
   static navigationOptions = {
@@ -74,9 +84,54 @@ export default class HomeScreen extends React.Component {
       }
     ],
 
-    isLoading: true
+    isLoading: true, 
+    trackers: [],
   };
 
+
+  requestNotificationPermission = async () => {
+    const enabled = await firebase.messaging().hasPermission();
+
+    if (enabled) {
+      const token = await firebase.messaging().getToken();
+
+      if (!token) {
+        const response = await fetch(
+          "https://store-price-tracker.herokuapp.com/api/register",
+          {
+            method: "POST",
+            body: {
+              token: token
+            }
+          }
+        );
+        const json = await response.json();
+
+        await AsyncStorage.setItem("userId", json.userId);
+      }
+    } else {
+      // ask for permission again
+      try {
+        await firebase.messaging().requestPermission();
+      } catch (error) {
+        this.alertForNotification()
+      }
+    }
+  };
+
+
+  alertForNotification = () => {
+    Alert.alert("", "Уведомления важны для работы приложения. Включить уведомления?", [
+      { text: "Нет", onPress: () => console.log("отмена") },
+      {
+        text: "Да",
+        onPress: () => {
+          await firebase.messaging().requestPermission()
+          console.log("successfull");
+        }
+      }
+    ]);
+  };
 
   deleteGood = id => {
     let newGoods = this.state.goods.filter(other => {
@@ -93,12 +148,23 @@ export default class HomeScreen extends React.Component {
       const ID = await AsyncStorage.getItem("userID");
 
       if (ID === null) {
-        // const ID = await this.registerForPushNotificationsAsync();
+        this.requestNotificationPermission()
+      }
+      else{
+        const trackersShapshot = await db.ref(`TRACKERS/${ID}`).once('value')
+        // trackersShapshot.map(child => {
+        //   const child = child.val();
+        //   this.setState({...trackers, child})
+        // });
+        const trackers = convertValToArray(trackersShapshot);
+        console.log('here', trackers);
+        this.setState({ trackers })
+
       }
 
       this.setState({ isLoading: false });
     } catch (error) {
-      console.log(error);
+        console.log(error);
     }
   };
 
@@ -117,7 +183,7 @@ export default class HomeScreen extends React.Component {
   };
 
   componentDidMount() {
-   
+   this.retrieveData();
   }
 
   render() {
