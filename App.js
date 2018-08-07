@@ -4,8 +4,6 @@ import { createStackNavigator } from "react-navigation";
 import { Toolbar, ToolbarContent } from "react-native-paper";
 import firebase from "react-native-firebase";
 
-Expo.ScreenOrientation.allow(Expo.ScreenOrientation.Orientation.PORTRAIT);
-
 import HomeScreen from "./components/HomeScreen";
 import StoresScreen from "./components/StoresScreen";
 import AddNewOddScreen from "./components/AddNewOddScreen";

@@ -26,6 +26,16 @@ const convertValToArray = (data) => {
   return arr;
 }
 
+// const MyScreen = () => (
+//   <View>
+//     <NavigationEvents
+//       onDidFocus={payload => this.retrieveData}
+//     />
+//   </View>
+// );
+
+// const trackersRef;
+
 export default class HomeScreen extends React.Component {
   static navigationOptions = {
     title: "Мои товары",
@@ -84,39 +94,11 @@ export default class HomeScreen extends React.Component {
       }
     ],
 
-    isLoading: true, 
+    isLoading: true,
     trackers: [],
-  };
+    trackersRef: null,
 
 
-  requestNotificationPermission = async () => {
-    const enabled = await firebase.messaging().hasPermission();
-
-    if (enabled) {
-      const token = await firebase.messaging().getToken();
-
-      if (!token) {
-        const response = await fetch(
-          "https://store-price-tracker.herokuapp.com/api/register",
-          {
-            method: "POST",
-            body: {
-              token: token
-            }
-          }
-        );
-        const json = await response.json();
-
-        await AsyncStorage.setItem("userId", json.userId);
-      }
-    } else {
-      // ask for permission again
-      try {
-        await firebase.messaging().requestPermission();
-      } catch (error) {
-        this.alertForNotification()
-      }
-    }
   };
 
 
@@ -125,7 +107,7 @@ export default class HomeScreen extends React.Component {
       { text: "Нет", onPress: () => console.log("отмена") },
       {
         text: "Да",
-        onPress: () => {
+        onPress: async () => {
           await firebase.messaging().requestPermission()
           console.log("successfull");
         }
@@ -133,38 +115,76 @@ export default class HomeScreen extends React.Component {
     ]);
   };
 
-  deleteGood = id => {
+  deleteGood = async (id) => {
+    const USERID = await AsyncStorage.getItem("userID");
     let newGoods = this.state.goods.filter(other => {
       return other.id != id;
     });
     console.log("deletedID:", id);
     console.log("newGoods", newGoods);
+
+    db.ref(`TRACKERS/${USERID}/${id}`).set(null);
+
     this.setState({ goods: newGoods });
+
+
   };
 
-  retrieveData = async () => {
-    this.setState({ isLoading: true });
+
+  requestNotificationPermission = async () => {
+    console.log('here');
     try {
+      const enabled = await firebase.messaging().hasPermission();
+
+      if (enabled) {
+        const token = await firebase.messaging().getToken();
+        ;
+        if (token) {
+          const res = await fetch("https://store-price-tracker.herokuapp.com/api/db/register")
+          const result = await res.json();
+          await AsyncStorage.setItem("userID", result);
+          await AsyncStorage.setItem("userToken", token);
+        }
+      }
+      else {
+        // ask for permission again
+        await firebase.messaging().requestPermission();
+      }
+
+      return Promise.resolve();
+
+    } catch (e) {
+      return Promise.reject();
+    }
+  };
+
+
+  retrieveData = async () => {
+    try {
+      console.log('s')
+      this.setState({ isLoading: true });
+
       const ID = await AsyncStorage.getItem("userID");
-
-      if (ID === null) {
-        this.requestNotificationPermission()
+      console.log('ID', ID)
+      if (!ID) {
+        console.log('1')
+        await this.requestNotificationPermission()
       }
-      else{
-        const trackersShapshot = await db.ref(`TRACKERS/${ID}`).once('value')
-        // trackersShapshot.map(child => {
-        //   const child = child.val();
-        //   this.setState({...trackers, child})
-        // });
-        const trackers = convertValToArray(trackersShapshot);
-        console.log('here', trackers);
-        this.setState({ trackers })
+      else {
+        console.log("2")
+        let trackers = [];
+        let trackersRef = db.ref(`TRACKERS/${ID}`).on('value', snapshot => {
+          snapshot.forEach(dataSnapshot => {
+            trackers.push(dataSnapshot.val())
+          })
+          this.setState({ trackers, trackersRef }, () => console.log('here', trackers));
+
+        })
 
       }
-
       this.setState({ isLoading: false });
     } catch (error) {
-        console.log(error);
+      console.log('error', error)
     }
   };
 
@@ -183,75 +203,85 @@ export default class HomeScreen extends React.Component {
   };
 
   componentDidMount() {
-   this.retrieveData();
+    this.retrieveData();
   }
+
+
 
   render() {
     const { isLoading, goods } = this.state;
 
-    if (!isLoading) {
+    if (isLoading) {
       return <ActivityIndicator size="large" color="#0000ff" />;
     }
 
     return (
       <View style={styles.container}>
-        {this.state.goods.length == 0 ? (
-          <View style={{ justifyContent: "center", alignItems: "center" }}>
-            <Text>Добавьте товар в список</Text>
-          </View>
-        ) : (
-          <View style={styles.container}>
-            <FlatList
-              contentContainerStyle={{ margin: 4 }}
-              horizontal={false}
-              numColumns={2}
-              data={goods}
-              horizontal={false}
-              renderItem={({ item }) => {
-                return (
-                  <View style={styles.oddView}>
-                    <Image
-                      style={{ width: 150, height: 150, margin: 4 }}
-                      source={{ uri: item.url }}
-                    />
-                    <Text>
-                      Товар:<Text style={{ fontWeight: "bold" }}>
-                        {item.title}
-                      </Text>
-                    </Text>
-                    <Text style={{ paddingBottom: 50 }}>Цена: {item.cost}</Text>
-                    <TouchableOpacity
-                      style={styles.buttonDelete}
-                      onPress={() => this.alert(item)}
-                    >
-                      <Text>Удалить</Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              }}
-              keyExtractor={(item, index) => {
-                item.id;
-              }}
-            />
-            <View style={styles.container}>
-              <Button
-                primary
-                raised
-                compact
-                style={styles.addBtn}
-                onPress={() => this.props.navigation.navigate("Stores")}
-              >
-                <Icon name="plus" size={40} color="white" />
-              </Button>
+        {this.state.trackers.length == 0 ? (
+          <View style={{ flex: 1 }}>
+            <View style={{ justifyContent: "center", alignItems: "center", flex: 1 }}>
+              <Text>Добавьте товар в список</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <TouchableOpacity style={{ flex: 1 }} onPress={() => this.props.navigation.navigate('Stores')}>
+                <Image style={styles.myAddBtn} source={require('./img/myplus.png')} />
+              </TouchableOpacity>
             </View>
           </View>
-        )}
+        ) : (
+            <View style={styles.container}>
+              <FlatList
+                contentContainerStyle={{ margin: 4 }}
+                horizontal={false}
+                numColumns={2}
+                data={goods}
+                horizontal={false}
+                renderItem={({ item }) => {
+                  return (
+                    <View style={styles.oddView}>
+                      <Image
+                        style={{ width: 150, height: 150, margin: 4 }}
+                        source={{ uri: item.url }}
+                      />
+                      <Text>
+                        Товар:<Text style={{ fontWeight: "bold" }}>
+                          {item.title}
+                        </Text>
+                      </Text>
+                      <Text style={{ paddingBottom: 50 }}>Цена: {item.cost}</Text>
+                      <TouchableOpacity
+                        style={styles.buttonDelete}
+                        onPress={() => this.alert(item)}
+                      >
+                        <Text>Удалить</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                }}
+                keyExtractor={(item, index) => {
+                  item.id;
+                }}
+              />
+              <TouchableOpacity onPress={() => this.props.navigation.navigate('Stores')}>
+                <View style={{ flex: 1 }}>
+                  <Image style={styles.myAddBtn} source={require('./img/myplus.png')} />
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
       </View>
     );
   }
 }
 
 const styles = StyleSheet.create({
+  myAddBtn: {
+    width: 70,
+    height: 70,
+    position: "absolute",
+    bottom: 16,
+    right: 16,
+  },
   container: {
     flex: 1
   },
@@ -264,7 +294,7 @@ const styles = StyleSheet.create({
   },
 
   addBtn: {
-    backgroundColor: "red",
+
     position: "absolute",
     bottom: 16,
     right: 16,

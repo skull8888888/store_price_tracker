@@ -9,15 +9,19 @@ import {
   KeyboardAvoidingView,
   Modal,
   TouchableHighlight,
-  Dimensions
+  Dimensions,
+  AsyncStorage,
 } from "react-native";
 import { TextInput } from "react-native-paper";
-import { green100 } from "react-native-paper/src/styles/colors";
-
+//import { green100 } from "react-native-paper/src/styles/colors";
+import firebase from "react-native-firebase";
 const { width, height } = Dimensions.get("window");
-const PUSH_ENDPOINT = "";
+const db = firebase.database();
+
+
 
 export default class AddNewOddScreen extends React.Component {
+
   static navigationOptions = {
     title: "Добавление товара",
     headerStyle: {
@@ -34,36 +38,91 @@ export default class AddNewOddScreen extends React.Component {
     color: "gray",
     borderBottomColor: "gray",
     modalVisible: false,
-    text: "Введите ссылку на товар"
+    text: "Введите ссылку на товар",
+    good: {
+      curPrice: 0,
+      imgURL: '',
+      goodTitle: '',
+    },
+    INFO: this.props.navigation.state.params.info,
   };
 
-  // getId = () => {
-  //   return AsyncStorage.getItem("userId")
-  //     .then(req => JSON.parse(req))
-  //     .catch(error => console.log("error!"));
-  // };
+  checkGood = async () => {
+    console.log('touched');
+    const ID = await AsyncStorage.getItem("userID")
+    console.log('myid', ID)
+    console.log('link', this.state.link)
+    console.log('storeID', this.state.INFO.id)
+
+    let details = {
+      link: this.state.link,
+      storeId: this.state.INFO.id,
+    }
+
+    let formBody = [];
+    for (var property in details) {
+      var encodedKey = encodeURIComponent(property);
+      var encodedValue = encodeURIComponent(details[property]);
+      formBody.push(encodedKey + "=" + encodedValue);
+    }
+    formBody = formBody.join("&");
+
+    fetch('https://store-price-tracker.herokuapp.com/api/parser', {
+
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+      },
+      body: formBody
+    }
+    ).then((response) => response.json())
+
+      .then((resJson) => {
+        console.log("resJson", resJson)
+        //console.log(resJson.data.currentPrice, resJson.data.imageURL, resJson.data.title)
+
+
+        let newGood = {
+          curPrice: resJson.data.currentPrice,
+          imgURL: resJson.data.imageURL,
+          goodTitle: resJson.data.title,
+        }
+        this.setState(prevState => ({
+          good: newGood,
+        }))
+
+
+
+
+      }).catch(error => console.log('error while sending good to server'))
+    this.setModalVisible(true);
+  }
+
+
+
   setModalVisible = visible => {
     this.setState({ modalVisible: visible });
   };
 
-  handleTrue = () => {
-    // const ID = getId();
-    // fetch(PUSH_ENDPOINT, {
-    //   method: "POST",
-    //   headers: {
-    //     Accept: "application/json",
-    //     "Content-Type": "application/json"
-    //   },
-    //   body: JSON.stringify({
-    //     odd: {
-    //       userID: ID,
-    //       link: this.state.link,
-    //       storeID: storeId,
-    //       currentPrice: curPrice,
-    //       title: oddTitle
-    //     }
-    //   })
-    // });
+  handleTrue = async () => {
+    const ID = await AsyncStorage.getItem("userID")
+    fetch('https://store-price-tracker.herokuapp.com/api/tracker', {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        good: {
+          userID: ID,
+          link: this.state.link,
+          storeID: this.state.INFO.id,
+          currentPrice: this.state.currentPrice,
+          imageURL: this.state.imgURL,
+          title: this.state.goodTitle,
+        }
+      })
+    });
     this.props.navigation.navigate("Home");
     this.setModalVisible(!this.state.modalVisible);
   };
@@ -74,6 +133,7 @@ export default class AddNewOddScreen extends React.Component {
   };
 
   render() {
+    console.log('hereIAM:', this.props.navigation.state.params.info)
     return (
       <ScrollView style={styles.container}>
         <Modal
@@ -90,8 +150,9 @@ export default class AddNewOddScreen extends React.Component {
 
               <View style={{ flex: 1 }}>
                 <View style={{ flex: 1 }}>
+                  {console.log('myURLLINk', this.state.good.imgURL)}
                   <Image
-                    source={{ uri: this.state.link }}
+                    source={{ uri: this.state.good.imgURL }}
                     style={{ flex: 1 }}
                     resizeMode="cover"
                   />
@@ -122,10 +183,11 @@ export default class AddNewOddScreen extends React.Component {
             </View>
           </View>
         </Modal>
+
         <View style={styles.logoIn}>
           <Image
             style={styles.image}
-            source={{ uri: this.props.navigation.state.params.info.url }}
+            source={{ uri: this.props.navigation.state.params.info.logoURL }}
           />
         </View>
         <View style={styles.container2}>
@@ -139,19 +201,17 @@ export default class AddNewOddScreen extends React.Component {
             multiline={true}
             onChangeText={link => this.setState({ link })}
           />
-          />
         </View>
         <View style={styles.buttonIn}>
           <TouchableOpacity
-            onPress={() => {
-              this.setModalVisible(true);
-            }}
+            onPress={this.checkGood}
             style={styles.button}
           >
             <Text>Добавить</Text>
           </TouchableOpacity>
         </View>
-        >
+
+
       </ScrollView>
     );
   }
